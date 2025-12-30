@@ -128,34 +128,6 @@ headers = {"Authorization": f"Bearer {access_token}"}
 
 activities = requests.get(activities_url, headers=headers, params={"per_page": 200, "page": 1}).json()
 
-
-Ok — that error confirms 100% that your CSV from Strava still doesn’t have the column distance_km when load_data() runs.
-
-That’s why estimate_calories() fails on the line:
-
-python
-Copy code
-return row['distance_km'] * 40
-Even though we added a transformation step earlier, Streamlit is likely caching the previous (raw) CSV, or the column never got created because Strava returned something slightly different.
-
-How we fix this
-We can fix it reliably by:
-
-Making sure our Strava-fetch block creates distance_km and other expected columns every time.
-Clearing Streamlit’s cached CSV when redeploying so the old bad data isn’t used.
-Update the fetch-and-save block — guaranteed columns
-Find this in your code (right after activities = requests.get(...)):
-
-python
-Copy code
-# Convert to DataFrame and save
-df_strava = pd.DataFrame(activities)
-os.makedirs("data", exist_ok=True)
-df_strava.to_csv("data/activities.csv", index=False)
-Replace it with:
-
-python
-Copy code
 # Convert raw Strava JSON to DataFrame
 df_strava = pd.DataFrame(activities)
 
@@ -170,6 +142,10 @@ df_strava['id'] = df_strava['id']
 df_strava['name'] = df_strava['name']
 df_strava['kudos'] = df_strava.get('kudos_count', 0)
 df_strava['kilojoules'] = df_strava.get('kilojoules', 0)
+
+# Save transformed data
+os.makedirs("data", exist_ok=True)
+df_strava.to_csv("data/activities.csv", index=False)
 
 # Save transformed data
 os.makedirs("data", exist_ok=True)
