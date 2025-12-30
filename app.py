@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import requests
 import os
 
 st.set_page_config(page_title="Humblebrag Dashboard", layout="wide", page_icon="🔥", initial_sidebar_state="expanded")
@@ -103,6 +104,34 @@ TRANSLATIONS = {
         'footer': "Made with ❤️ by Akos"
     }
 }
+
+# Get secrets
+CLIENT_ID = st.secrets["STRAVA_CLIENT_ID"]
+CLIENT_SECRET = st.secrets["STRAVA_CLIENT_SECRET"]
+REFRESH_TOKEN = st.secrets["STRAVA_REFRESH_TOKEN"]
+
+# Get new access token from Strava
+auth_response = requests.post(
+    "https://www.strava.com/oauth/token",
+    data={
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "grant_type": "refresh_token",
+        "refresh_token": REFRESH_TOKEN
+    }
+).json()
+access_token = auth_response["access_token"]
+
+# Fetch activities from Strava
+activities_url = "https://www.strava.com/api/v3/athlete/activities"
+headers = {"Authorization": f"Bearer {access_token}"}
+
+activities = requests.get(activities_url, headers=headers, params={"per_page": 200, "page": 1}).json()
+
+# Convert to DataFrame and save
+df_strava = pd.DataFrame(activities)
+os.makedirs("data", exist_ok=True)
+df_strava.to_csv("data/activities.csv", index=False)
 
 @st.cache_data
 def load_data():
