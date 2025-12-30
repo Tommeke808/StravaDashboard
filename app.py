@@ -128,9 +128,25 @@ headers = {"Authorization": f"Bearer {access_token}"}
 
 activities = requests.get(activities_url, headers=headers, params={"per_page": 200, "page": 1}).json()
 
-# Convert to DataFrame and save
+# Convert to DataFrame
 df_strava = pd.DataFrame(activities)
+
+# Transform Strava data to match dashboard's expected columns
+df_strava['distance_km'] = df_strava['distance'] / 1000  # meters → km
+df_strava['elevation_m'] = df_strava['total_elevation_gain']  # already meters
+df_strava['average_speed_kmh'] = df_strava['average_speed'] * 3.6  # m/s → km/h
+df_strava['moving_time_min'] = df_strava['moving_time'] / 60  # seconds → minutes
+df_strava['start_date'] = pd.to_datetime(df_strava['start_date_local'])
+df_strava['type'] = df_strava['type']  # activity type
+df_strava['id'] = df_strava['id']  # activity ID
+df_strava['name'] = df_strava['name']
+df_strava['kudos'] = df_strava.get('kudos_count', 0)  # kudos count
+df_strava['kilojoules'] = df_strava.get('kilojoules', 0)  # energy
+
+# Ensure "data" folder exists
 os.makedirs("data", exist_ok=True)
+
+# Save transformed data to CSV
 df_strava.to_csv("data/activities.csv", index=False)
 
 @st.cache_data
