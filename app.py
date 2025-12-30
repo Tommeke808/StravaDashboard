@@ -128,27 +128,52 @@ headers = {"Authorization": f"Bearer {access_token}"}
 
 activities = requests.get(activities_url, headers=headers, params={"per_page": 200, "page": 1}).json()
 
-# Convert to DataFrame
+
+Ok — that error confirms 100% that your CSV from Strava still doesn’t have the column distance_km when load_data() runs.
+
+That’s why estimate_calories() fails on the line:
+
+python
+Copy code
+return row['distance_km'] * 40
+Even though we added a transformation step earlier, Streamlit is likely caching the previous (raw) CSV, or the column never got created because Strava returned something slightly different.
+
+How we fix this
+We can fix it reliably by:
+
+Making sure our Strava-fetch block creates distance_km and other expected columns every time.
+Clearing Streamlit’s cached CSV when redeploying so the old bad data isn’t used.
+Update the fetch-and-save block — guaranteed columns
+Find this in your code (right after activities = requests.get(...)):
+
+python
+Copy code
+# Convert to DataFrame and save
+df_strava = pd.DataFrame(activities)
+os.makedirs("data", exist_ok=True)
+df_strava.to_csv("data/activities.csv", index=False)
+Replace it with:
+
+python
+Copy code
+# Convert raw Strava JSON to DataFrame
 df_strava = pd.DataFrame(activities)
 
-# Transform Strava data to match dashboard's expected columns
-df_strava['distance_km'] = df_strava['distance'] / 1000  # meters → km
-df_strava['elevation_m'] = df_strava['total_elevation_gain']  # already meters
-df_strava['average_speed_kmh'] = df_strava['average_speed'] * 3.6  # m/s → km/h
-df_strava['moving_time_min'] = df_strava['moving_time'] / 60  # seconds → minutes
-df_strava['start_date'] = pd.to_datetime(df_strava['start_date_local'])
-df_strava['type'] = df_strava['type']  # activity type
-df_strava['id'] = df_strava['id']  # activity ID
+# ✅ Make sure required columns exist for the dashboard code
+df_strava['distance_km'] = df_strava['distance'].fillna(0) / 1000  # meters to km
+df_strava['elevation_m'] = df_strava['total_elevation_gain'].fillna(0)
+df_strava['average_speed_kmh'] = df_strava['average_speed'].fillna(0) * 3.6
+df_strava['moving_time_min'] = df_strava['moving_time'].fillna(0) / 60
+df_strava['start_date'] = pd.to_datetime(df_strava['start_date_local'], errors='coerce')
+df_strava['type'] = df_strava['sport_type'].fillna(df_strava['type'])  # Strava may use sport_type
+df_strava['id'] = df_strava['id']
 df_strava['name'] = df_strava['name']
-df_strava['kudos'] = df_strava.get('kudos_count', 0)  # kudos count
-df_strava['kilojoules'] = df_strava.get('kilojoules', 0)  # energy
+df_strava['kudos'] = df_strava.get('kudos_count', 0)
+df_strava['kilojoules'] = df_strava.get('kilojoules', 0)
 
-# Ensure "data" folder exists
+# Save transformed data
 os.makedirs("data", exist_ok=True)
-
-# Save transformed data to CSV
 df_strava.to_csv("data/activities.csv", index=False)
-
 @st.cache_data
 def load_data():
     if not os.path.exists('data/activities.csv'): return pd.DataFrame()
