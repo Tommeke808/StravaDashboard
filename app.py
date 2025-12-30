@@ -126,11 +126,25 @@ access_token = auth_response["access_token"]
 activities_url = "https://www.strava.com/api/v3/athlete/activities"
 headers = {"Authorization": f"Bearer {access_token}"}
 
-activities = requests.get(activities_url, headers=headers, params={"per_page": 200, "page": 1}).json()
+all_activities = []
+page = 1
 
-# Convert raw Strava JSON to DataFrame
-df_strava = pd.DataFrame(activities)
+while True:
+    r = requests.get(
+        "https://www.strava.com/api/v3/athlete/activities",
+        headers={"Authorization": f"Bearer {access_token}"},
+        params={"per_page": 200, "page": page}
+    )
+    data = r.json()
+    
+    if not data:  # Stop if page is empty
+        break
 
+    all_activities.extend(data)
+    page += 1
+
+# Convert *all* activities to DataFrame
+df_strava = pd.DataFrame(all_activities)
 # ✅ Make sure required columns exist for the dashboard code
 df_strava['distance_km'] = df_strava['distance'].fillna(0) / 1000  # meters to km
 df_strava['elevation_m'] = df_strava['total_elevation_gain'].fillna(0)
